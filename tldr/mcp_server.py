@@ -97,8 +97,19 @@ def _ensure_daemon(project: str, timeout: float = 10.0) -> None:
                 return
 
             # Clean up stale socket if daemon is dead
+            # Clean up stale socket if daemon is dead
             if socket_path.exists():
-                socket_path.unlink(missing_ok=True)
+                is_win = os.name == "nt"
+                if not is_win:
+                    # Unix: check if it's a socket
+                    import stat
+                    try:
+                        if stat.S_ISSOCK(socket_path.stat().st_mode):
+                            socket_path.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+                # Windows: do nothing (TCP no socket file), or if it was a file,
+                # we don't accidentally delete random files unless we are sure.
 
             # Start daemon
             subprocess.Popen(
