@@ -16,7 +16,7 @@ import sys
 import tempfile
 import time
 import os
-import platform
+
 from pathlib import Path
 
 # Conditional imports for file locking
@@ -98,13 +98,13 @@ def _ensure_daemon(project: str, timeout: float = 10.0) -> None:
                 lock_timeout = 10.0  # Same as startup.py
                 while True:
                     try:
-                        msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 10)
+                        msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
                         break
-                    except OSError:
+                    except OSError as e:
                         if time.time() - lock_start > lock_timeout:
                             raise RuntimeError(
                                 f"Timeout acquiring lock on {lock_path} after {lock_timeout}s"
-                            )
+                            ) from e
                         time.sleep(0.1)
             else:
                 # Unix locking
@@ -147,7 +147,7 @@ def _ensure_daemon(project: str, timeout: float = 10.0) -> None:
         finally:
             if os.name == "nt":
                 try:
-                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 10)
+                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
                 except OSError:
                     pass
             else:
@@ -158,16 +158,17 @@ def _send_raw(project: str, command: dict) -> dict:
     """Send command to daemon socket."""
     addr, port = _get_connection_info(project)
     
-    if port is not None:
-        # TCP socket for Windows
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect((addr, port))
-    else:
-        # Unix socket for Linux/macOS
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.connect(addr)
-    
+    sock = None
     try:
+        if port is not None:
+            # TCP socket for Windows
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect((addr, port))
+        else:
+            # Unix socket for Linux/macOS
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.connect(addr)
+    
         sock.sendall(json.dumps(command).encode() + b"\n")
 
         # Read response
@@ -185,7 +186,8 @@ def _send_raw(project: str, command: dict) -> dict:
 
         return json.loads(b"".join(chunks))
     finally:
-        sock.close()
+        if sock:
+            sock.close()
 
 
 def _send_command(project: str, command: dict) -> dict:

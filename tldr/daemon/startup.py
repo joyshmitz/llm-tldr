@@ -14,7 +14,7 @@ import socket
 import sys
 import tempfile
 import time
-import platform
+
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, IO
 
@@ -308,9 +308,26 @@ def start_daemon(project_path: str | Path, foreground: bool = False):
                             startupinfo=startupinfo,
                             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
                             stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
                         )
                         print(f"Daemon started with PID {proc.pid}")
-                        print(f"Listening on {addr}:{port}")
+
+                        # Verify daemon is listening
+                        start_wait = time.time()
+                        connected = False
+                        while time.time() - start_wait < 5.0:
+                            try:
+                                with socket.create_connection((addr, port), timeout=0.5):
+                                    connected = True
+                                    break
+                            except (OSError, ConnectionRefusedError):
+                                time.sleep(0.1)
+
+                        if connected:
+                            print(f"Listening on {addr}:{port}")
+                        else:
+                            logger.error("Daemon started but failed to accept connections")
+                            # Should we kill it? Maybe not strictly required but logging is good.
 
                     finally:
                         # Release lock
@@ -318,8 +335,8 @@ def start_daemon(project_path: str | Path, foreground: bool = False):
                             msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
                         except OSError:
                             pass
-            except Exception as e:
-                print(f"Error starting daemon: {e}")
+            except Exception:
+                logger.exception("Error starting daemon")
 
         else:
             # Unix: Fork and run in background

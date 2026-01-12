@@ -1250,6 +1250,7 @@ class TLDRDaemon:
 
         if os.name == "nt":
             # Windows uses TCP sockets, no file to cleanup
+            logger.info("Socket cleaned up (TCP)")
             return
 
         if self.socket_path.exists():
