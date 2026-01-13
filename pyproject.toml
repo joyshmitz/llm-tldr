@@ -8,14 +8,14 @@ version = "1.2.4"
 description = "Token-efficient code analysis for LLMs. 5-layer stack: AST, Call Graph, CFG, DFG, PDG. 95% token savings. 15 languages."
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "Apache-2.0"}
+license = {text = "AGPL-3.0"}
 authors = [{name = "parcadei"}]
 maintainers = [{name = "parcadei"}]
 keywords = ["code-analysis", "llm", "ai", "tree-sitter", "call-graph", "cfg", "dfg", "pdg", "mcp", "static-analysis"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
