@@ -1290,6 +1290,7 @@ def get_file_tree(
     root: str | Path,
     extensions: set[str] | None = None,
     exclude_hidden: bool = True,
+    ignore_spec=None,
 ) -> dict:
     """
     Get file tree structure for a project.
@@ -1298,6 +1299,7 @@ def get_file_tree(
         root: Root directory to scan
         extensions: Optional set of extensions to include (e.g., {".py", ".ts"})
         exclude_hidden: If True, exclude hidden files/directories (default True)
+        ignore_spec: Optional pathspec.PathSpec for gitignore-style patterns
 
     Returns:
         Dict with tree structure:
@@ -1331,18 +1333,30 @@ def get_file_tree(
             if exclude_hidden and item.name.startswith("."):
                 continue
 
+            # Get relative path for ignore matching
+            try:
+                rel_path = str(item.relative_to(root))
+            except ValueError:
+                rel_path = item.name
+
             if item.is_dir():
+                # Check if directory should be ignored
+                if ignore_spec and ignore_spec.match_file(rel_path + "/"):
+                    continue
                 child = scan_dir(item)
                 # Only include non-empty directories
                 if child["children"] or extensions is None:
                     result["children"].append(child)
             elif item.is_file():
+                # Check if file should be ignored
+                if ignore_spec and ignore_spec.match_file(rel_path):
+                    continue
                 if extensions is None or item.suffix in extensions:
                     result["children"].append(
                         {
                             "name": item.name,
                             "type": "file",
-                            "path": str(item.relative_to(root)),
+                            "path": rel_path,
                         }
                     )
 
@@ -1358,6 +1372,7 @@ def search(
     context_lines: int = 0,
     max_results: int = 100,
     max_files: int = 10000,
+    ignore_spec=None,
 ) -> list[dict]:
     """
     Search files for a regex pattern.
@@ -1369,6 +1384,7 @@ def search(
         context_lines: Number of context lines to include (default 0)
         max_results: Maximum matches to return (default 100, 0 = unlimited)
         max_files: Maximum files to scan (default 10000, 0 = unlimited)
+        ignore_spec: Optional pathspec.PathSpec for gitignore-style patterns
 
     Returns:
         List of matches:
@@ -1385,7 +1401,7 @@ def search(
 
     import re
 
-    # Directories to skip (common junk)
+    # Fallback directories to skip if no ignore_spec provided
     SKIP_DIRS = {
         "node_modules", "__pycache__", ".git", ".svn", ".hg",
         "dist", "build", ".next", ".nuxt", "coverage", ".tox",
@@ -1405,16 +1421,24 @@ def search(
         if not file_path.is_file():
             continue
 
-        # Skip hidden files and junk directories
+        # Get relative path for filtering
         try:
             rel_path = file_path.relative_to(root)
+            rel_path_str = str(rel_path)
             parts = rel_path.parts
+        except ValueError:
+            continue
+
+        # Use ignore_spec if provided, otherwise fall back to hardcoded SKIP_DIRS
+        if ignore_spec:
+            if ignore_spec.match_file(rel_path_str):
+                continue
+        else:
+            # Fallback: skip hidden files and junk directories
             if any(part.startswith(".") for part in parts):
                 continue
             if any(part in SKIP_DIRS for part in parts):
                 continue
-        except ValueError:
-            continue
 
         # Filter by extension
         if extensions and file_path.suffix not in extensions:

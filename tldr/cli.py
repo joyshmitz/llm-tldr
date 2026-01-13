@@ -131,7 +131,8 @@ Examples:
 Ignore Patterns:
     TLDR respects .tldrignore files (gitignore syntax).
     First run creates .tldrignore with sensible defaults.
-    Use --no-ignore to bypass ignore patterns.
+    Use --ignore PATTERN to add patterns from CLI (repeatable).
+    Use --no-ignore to bypass all ignore patterns.
 
 Daemon:
     TLDR runs a per-project daemon for fast repeated queries.
@@ -160,6 +161,12 @@ Semantic Search:
         "--no-ignore",
         action="store_true",
         help="Ignore .tldrignore patterns (include all files)",
+    )
+    parser.add_argument(
+        "--ignore",
+        action="append",
+        metavar="PATTERN",
+        help="Additional ignore patterns (gitignore syntax, can be repeated)",
     )
 
     # Shell completion support
@@ -531,28 +538,59 @@ Semantic Search:
 
         return graph
 
+    # Helper to load ignore patterns from .tldrignore + CLI --ignore flags
+    def get_ignore_spec(project_path: str | Path):
+        """Load ignore patterns, combining .tldrignore with CLI --ignore flags."""
+        if getattr(args, 'no_ignore', False):
+            return None
+
+        from .tldrignore import load_ignore_patterns
+        import pathspec
+
+        project_path = Path(project_path).resolve()
+
+        # Load base patterns from .tldrignore
+        base_spec = load_ignore_patterns(project_path)
+
+        # Add CLI --ignore patterns if any
+        cli_patterns = getattr(args, 'ignore', None) or []
+        if cli_patterns:
+            # Combine base patterns with CLI patterns
+            all_patterns = list(base_spec.patterns) + [
+                pathspec.patterns.GitWildMatchPattern(p) for p in cli_patterns
+            ]
+            return pathspec.PathSpec(all_patterns)
+
+        return base_spec
+
     try:
         if args.command == "tree":
             ext = set(args.ext) if args.ext else None
+            ignore_spec = get_ignore_spec(args.path)
             result = get_file_tree(
-                args.path, extensions=ext, exclude_hidden=not args.show_hidden
+                args.path, extensions=ext, exclude_hidden=not args.show_hidden,
+                ignore_spec=ignore_spec
             )
             print(json.dumps(result, indent=2))
 
         elif args.command == "structure":
+            ignore_spec = get_ignore_spec(args.path)
             result = get_code_structure(
-                args.path, language=args.lang, max_results=args.max
+                args.path, language=args.lang, max_results=args.max,
+                ignore_spec=ignore_spec
             )
             print(json.dumps(result, indent=2))
 
         elif args.command == "search":
             ext = set(args.ext) if args.ext else None
+            ignore_spec = get_ignore_spec(args.path)
             result = api_search(
                 args.pattern, args.path,
                 extensions=ext,
                 context_lines=args.context,
                 max_results=args.max,
                 max_files=args.max_files,
+                ignore_spec=ignore_spec,
             )
             print(json.dumps(result, indent=2))
 

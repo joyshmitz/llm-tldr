@@ -316,7 +316,7 @@ For AI tools (Claude Desktop, Claude Code):
 
 ### `.tldrignore` - Exclude Files
 
-TLDR respects `.tldrignore` (gitignore syntax) to skip files during indexing:
+TLDR respects `.tldrignore` (gitignore syntax) for all commands including `tree`, `structure`, `search`, `calls`, and semantic indexing:
 
 ```bash
 # Auto-create with sensible defaults
@@ -335,6 +335,15 @@ tldr warm .  # Creates .tldrignore if missing
 large_test_fixtures/
 vendor/
 data/*.csv
+```
+
+**CLI Flags:**
+```bash
+# Add patterns from command line (can be repeated)
+tldr --ignore "packages/old/" --ignore "*.generated.ts" tree .
+
+# Bypass all ignore patterns
+tldr --no-ignore tree .
 ```
 
 ### Settings - Daemon Behavior
